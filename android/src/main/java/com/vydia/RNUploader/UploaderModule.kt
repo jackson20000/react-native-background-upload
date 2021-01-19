@@ -16,7 +16,6 @@ import net.gotev.uploadservice.data.UploadNotificationConfig
 import net.gotev.uploadservice.data.UploadNotificationStatusConfig
 import net.gotev.uploadservice.observer.request.GlobalRequestObserver
 import net.gotev.uploadservice.okhttp.OkHttpStack
-import net.gotev.uploadservice.protocols.binary.BinaryUploadRequest
 import net.gotev.uploadservice.protocols.multipart.MultipartUploadRequest
 import okhttp3.OkHttpClient
 import java.io.File
@@ -126,7 +125,7 @@ class UploaderModule(val reactContext: ReactApplicationContext) : ReactContextBa
    */
   @ReactMethod
   fun startUpload(options: ReadableMap, promise: Promise) {
-    for (key in arrayOf("url", "path")) {
+    for (key in arrayOf("url", "field")) {
       if (!options.hasKey(key)) {
         promise.reject(java.lang.IllegalArgumentException("Missing '$key' field."))
         return
@@ -145,7 +144,7 @@ class UploaderModule(val reactContext: ReactApplicationContext) : ReactContextBa
       return
     }
     configureUploadServiceHTTPStack(options, promise)
-    var requestType: String? = "raw"
+    var requestType: String? = "multipart"
     if (options.hasKey("type")) {
       requestType = options.getString("type")
       if (requestType == null) {
@@ -181,26 +180,19 @@ class UploaderModule(val reactContext: ReactApplicationContext) : ReactContextBa
     }
 
     val url = options.getString("url")
-    val filePath = options.getString("path")
+    var files = options.getArray("files")
+    var field = options.getString("field")
+    var arrayList = files!!.toArrayList()
     val method = if (options.hasKey("method") && options.getType("method") == ReadableType.String) options.getString("method") else "POST"
     val maxRetries = if (options.hasKey("maxRetries") && options.getType("maxRetries") == ReadableType.Number) options.getInt("maxRetries") else 2
     val customUploadId = if (options.hasKey("customUploadId") && options.getType("method") == ReadableType.String) options.getString("customUploadId") else null
     try {
-      val request = if (requestType == "raw") {
-        BinaryUploadRequest(this.reactApplicationContext, url!!)
-                .setFileToUpload(filePath!!)
-      } else {
-        if (!options.hasKey("field")) {
-          promise.reject(java.lang.IllegalArgumentException("field is required field for multipart type."))
-          return
-        }
-        if (options.getType("field") != ReadableType.String) {
-          promise.reject(java.lang.IllegalArgumentException("field must be string."))
-          return
-        }
-        MultipartUploadRequest(this.reactApplicationContext, url!!)
-                .addFileToUpload(filePath!!, options.getString("field")!!)
+      val request = MultipartUploadRequest(this.reactApplicationContext, url!!)
+      for (p in arrayList)
+      {
+        request.addFileToUpload(p!!.toString(), field!!)
       }
+
       request.setMethod(method!!)
               .setMaxRetries(maxRetries)
       if (notification.getBoolean("enabled")) {
